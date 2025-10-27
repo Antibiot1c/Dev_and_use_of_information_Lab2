@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8" />
+    <title>HobbyHub Frontend (Lab 2)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- React + ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel для JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            color: #222;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.07);
+            padding: 20px 24px 60px;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 1.4rem;
+        }
+
+        h2 {
+            font-size: 1.2rem;
+            margin-top: 2rem;
+        }
+
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 12px 0;
+            background: #fafafa;
+        }
+
+        label {
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        input, textarea, button {
+            font-size: 1rem;
+            padding: 8px 10px;
+        }
+
+        input, textarea {
+            width: 100%;
+            border-radius: 6px;
+            border: 1px solid #bbb;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+        }
+
+        button {
+            cursor: pointer;
+            border: 0;
+            border-radius: 6px;
+            background: #4f6bff;
+            color: #fff;
+            font-weight: 600;
+            box-shadow: 0 4px 14px rgba(79,107,255,0.3);
+        }
+
+            button:disabled {
+                background: #999;
+                box-shadow: none;
+                cursor: not-allowed;
+            }
+
+        .headerBox {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            color: #111;
+            border: 1px solid;
+        }
+
+            .headerBox.loggedOut {
+                background: #ffeaea;
+                border-color: #ffc7c7;
+            }
+
+            .headerBox.loggedIn {
+                background: #e8eeff;
+                border-color: #c2cdff;
+            }
+
+        .postsWrapper img {
+            max-width: 200px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            display: block;
+            margin-top: 8px;
+        }
+
+        .githubList {
+            max-height: 200px;
+            overflow-y: auto;
+            padding-left: 20px;
+            margin-top: 8px;
+        }
+
+            .githubList li {
+                margin-bottom: 6px;
+                font-size: 0.9rem;
+            }
+
+        .msg {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #333;
+            min-height: 1.2em;
+        }
+
+        .twoCol {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 700px) {
+            .twoCol {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .sectionBox {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 16px;
+            background: #fff;
+            margin-bottom: 20px;
+        }
+
+        .footerNote {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 40px;
+            line-height: 1.4;
+        }
+
+        .smallLabel {
+            font-size: 0.8rem;
+            color: #444;
+            line-height: 1.4;
+        }
+
+        .likeBtn {
+            margin-top: 6px;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(255,77,77,0.4);
+            border: none;
+        }
+
+        .likeOff {
+            background: #ff4d4d;
+            color: #fff;
+        }
+
+        .likeOn {
+            background: #21a14a;
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(33,161,74,0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="root"></div>
+    </div>
+
+    <script type="text/babel">
+
+const API_URL = "http://127.0.0.1:8000";
+
+// спільний запит до бекенду з токеном
+async function callApi(path, method = "GET", body) {
+  const headers = { "Content-Type": "application/json" };
+  const token = window.localStorage.getItem("token");
+  if (token) {
+    headers["Authorization"] = "Bearer " + token;
+  }
+
+  const res = await fetch(API_URL + path, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 401) {
+    // токен не валідний -> логаут на фронті
+    window.localStorage.removeItem("token");
+    window.localStorage.removeItem("user");
+  }
+
+  return res.json().catch(() => ({}));
+}
+
+// API-функції
+async function apiRegister(name, email, password) {
+  return callApi("/api/register", "POST", { name, email, password });
+}
+async function apiLogin(email, password) {
+  return callApi("/api/login", "POST", { email, password });
+}
+async function apiGetPosts() {
+  return callApi("/api/posts", "GET");
+}
+async function apiCreatePost(title, content, image_url) {
+  return callApi("/api/posts", "POST", { title, content, image_url });
+}
+async function apiToggleLike(post_id) {
+  return callApi("/api/like/" + post_id, "POST");
+}
+
+// GitHub (зовнішній API, без нашого сервера)
+async function fetchGithubRepos(username) {
+  const res = await fetch("https://api.github.com/users/" + username + "/repos");
+  return res.json();
+}
+
+// контекст користувача
+const AuthContext = React.createContext(null);
+
+function AuthProvider({ children }) {
+  const [user, setUser] = React.useState(null);
+
+  React.useEffect(() => {
+    const saved = window.localStorage.getItem("user");
+    if (saved) {
+      try { setUser(JSON.parse(saved)); } catch {}
+    }
+  }, []);
+
+  function doLogin(userObj, token) {
+    window.localStorage.setItem("token", token);
+    window.localStorage.setItem("user", JSON.stringify(userObj));
+    setUser(userObj);
+  }
+
+  function doLogout() {
+    window.localStorage.removeItem("token");
+    window.localStorage.removeItem("user");
+    setUser(null);
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, doLogin, doLogout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// Форма входу
+function LoginForm() {
+  const { doLogin } = React.useContext(AuthContext);
+
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [msg, setMsg] = React.useState("");
+  const [msgType, setMsgType] = React.useState("info"); // error/success
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setMsg("");
+    setMsgType("info");
+
+    const data = await apiLogin(email, password);
+
+    if (data.error) {
+      setMsg("Невірний email або пароль");
+      setMsgType("error");
+    } else {
+      doLogin(data.user, data.token);
+      setMsg("Успішний вхід ✔");
+      setMsgType("success");
+      setEmail("");
+      setPassword("");
+    }
+  }
+
+  return (
+    <div className="sectionBox">
+      <h2>Вхід</h2>
+      <form onSubmit={handleSubmit}>
+        <label>Email</label>
+        <input
+          value={email}
+          onChange={e=>setEmail(e.target.value)}
+          placeholder="you@example.com"
+        />
+        <label>Пароль</label>
+        <input
+          type="password"
+          value={password}
+          onChange={e=>setPassword(e.target.value)}
+          placeholder="••••••••"
+        />
+        <button type="submit">Увійти</button>
+      </form>
+      <div
+        className="msg"
+        style={{
+          color: msgType==="error" ? "#c51212" :
+                 msgType==="success" ? "#0a7a00" : "#333",
+          fontWeight: msgType==="error" ? "600" : "500",
+          marginTop:"8px"
+        }}
+      >
+        {msg}
+      </div>
+    </div>
+  );
+}
+
+// Форма реєстрації
+function RegisterForm() {
+  const [name,setName] = React.useState("");
+  const [email,setEmail] = React.useState("");
+  const [password,setPassword] = React.useState("");
+  const [msg,setMsg] = React.useState("");
+  const [msgType,setMsgType] = React.useState("info");
+
+  async function handleSubmit(e){
+    e.preventDefault();
+    setMsg("");
+    setMsgType("info");
+
+    const data = await apiRegister(name, email, password);
+    if (data.error) {
+        setMsg(data.error);
+        setMsgType("error");
+    } else {
+        setMsg("Реєстрація успішна ✔ Тепер увійдіть.");
+        setMsgType("success");
+        setName("");
+        setEmail("");
+        setPassword("");
+    }
+  }
+
+  return (
+    <div className="sectionBox">
+      <h2>Реєстрація</h2>
+      <form onSubmit={handleSubmit}>
+        <label>Ім'я / нікнейм</label>
+        <input
+          value={name}
+          onChange={e=>setName(e.target.value)}
+          placeholder="Ваше ім'я"
+        />
+        <label>Email</label>
+        <input
+          value={email}
+          onChange={e=>setEmail(e.target.value)}
+          placeholder="you@example.com"
+        />
+        <label>Пароль</label>
+        <input
+          type="password"
+          value={password}
+          onChange={e=>setPassword(e.target.value)}
+          placeholder="мінімум 6 символів"
+        />
+        <button type="submit">Створити акаунт</button>
+      </form>
+
+      <div
+        className="msg"
+        style={{
+          color: msgType==="error" ? "#c51212" :
+                 msgType==="success" ? "#0a7a00" : "#333",
+          fontWeight: msgType==="error" ? "600" : "500",
+          marginTop:"8px"
+        }}
+      >
+        {msg}
+      </div>
+    </div>
+  );
+}
+
+// Стрічка постів
+function Feed() {
+  const { user } = React.useContext(AuthContext);
+
+  const [posts, setPosts] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  async function load() {
+    setLoading(true);
+    const data = await apiGetPosts();
+    // підготуємо кожному посту прапорець likedByMe=false
+    const withFlags = (data.posts || []).map(p => ({
+      ...p,
+      likedByMe: false, // оновимо точно після кліку
+    }));
+    setPosts(withFlags);
+    setLoading(false);
+  }
+
+  React.useEffect(() => { load(); }, []);
+
+  async function handleToggleLike(postId) {
+    const data = await apiToggleLike(postId);
+
+    if (data && data.error === "Unauthorized") {
+      alert("Спочатку увійдіть, щоб поставити лайк ❤️");
+      return;
+    }
+
+    if (data && (data.status === "liked" || data.status === "unliked")) {
+      setPosts(prevPosts =>
+        prevPosts.map(p => {
+          if (p.id !== postId) return p;
+          // оновлюємо лічильник
+          const updatedLikes = data.likes;
+          // оновлюємо прапорець
+          const newLiked = data.status === "liked";
+          return { ...p, likes: updatedLikes, likedByMe: newLiked };
+        })
+      );
+    }
+  }
+
+  return (
+    <div className="sectionBox">
+      <h2>Стрічка спільноти</h2>
+      <button onClick={load} style={{marginBottom:"10px"}}>Оновити стрічку</button>
+
+      {loading && <p>Завантаження...</p>}
+      {!loading && posts.length === 0 && <p>Поки що немає постів.</p>}
+
+      <div className="postsWrapper">
+        {posts.map(p => (
+          <div key={p.id} className="card">
+            <h3 style={{marginTop:0}}>{p.title}</h3>
+            <div style={{fontSize:"0.95rem", whiteSpace:"pre-line"}}>{p.content}</div>
+            {p.image_url && <img src={p.image_url} alt="post" />}
+
+            <p className="smallLabel">
+              Автор: {p.author_name} &nbsp;|&nbsp; Лайків: {p.likes}
+            </p>
+
+            <button
+              className={
+                "likeBtn " + (p.likedByMe ? "likeOn" : "likeOff")
+              }
+              onClick={() => handleToggleLike(p.id)}
+            >
+              {p.likedByMe ? "✅ Лайк поставлено" : "❤️ Поставити лайк"}
+            </button>
+
+            {!user && (
+              <p className="smallLabel" style={{marginTop:"6px", color:"#888"}}>
+                (увійди, щоб лайкати)
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Додавання посту
+function NewPostForm() {
+  const [title,setTitle] = React.useState("");
+  const [content,setContent] = React.useState("");
+  const [imageUrl,setImageUrl] = React.useState("");
+  const [msg,setMsg] = React.useState("");
+
+  async function handleSubmit(e){
+    e.preventDefault();
+    const data = await apiCreatePost(title, content, imageUrl);
+    if (data.error) {
+      setMsg(data.error);
+    } else {
+      setMsg("Пост опубліковано ✔");
+      setTitle("");
+      setContent("");
+      setImageUrl("");
+    }
+  }
+
+  return (
+    <div className="sectionBox">
+      <h2>Новий пост</h2>
+      <form onSubmit={handleSubmit}>
+        <label>Заголовок</label>
+        <input
+          value={title}
+          onChange={e=>setTitle(e.target.value)}
+          placeholder="Що нового?"
+        />
+        <label>Текст</label>
+        <textarea
+          rows="4"
+          value={content}
+          onChange={e=>setContent(e.target.value)}
+          placeholder="Розкажи про свій хобі/проєкт..."
+        ></textarea>
+        <label>Image URL (опційно)</label>
+        <input
+          value={imageUrl}
+          onChange={e=>setImageUrl(e.target.value)}
+          placeholder="https://..."
+        />
+        <button type="submit">Опублікувати</button>
+      </form>
+      <p className="msg">{msg}</p>
+      <div className="smallLabel">
+        Після публікації натисни "Оновити стрічку" вище, щоб побачити свій пост.
+      </div>
+    </div>
+  );
+}
+
+// GitHub інтеграція
+function GitHubWidget() {
+  const [username, setUsername] = React.useState("facebook");
+  const [repos, setRepos] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+
+  async function loadRepos() {
+    setLoading(true);
+    const data = await fetchGithubRepos(username);
+    setRepos(Array.isArray(data) ? data : []);
+    setLoading(false);
+  }
+
+  return (
+    <div className="sectionBox">
+      <h2>Портфоліо розробника (GitHub)</h2>
+      <p className="smallLabel">
+        Додай свій GitHub, щоб показати свої pet-проєкти. Це частина твого хобі.
+      </p>
+
+      <label>GitHub username</label>
+      <input
+        value={username}
+        onChange={e=>setUsername(e.target.value)}
+        placeholder="наприклад: vercel"
+        style={{maxWidth:"300px"}}
+      />
+      <button onClick={loadRepos} style={{marginTop:"6px"}}>Завантажити репозиторії</button>
+
+      {loading && <p>Завантаження...</p>}
+      {!loading && repos.length > 0 && (
+        <ul className="githubList">
+          {repos.map(r => (
+            <li key={r.id}>
+              <strong>{r.name}</strong> ★{r.stargazers_count}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!loading && repos.length === 0 && (
+        <p className="smallLabel">Немає даних / неправильний користувач або ще не завантажували.</p>
+      )}
+    </div>
+  );
+}
+
+// Увесь застосунок
+function App() {
+  const { user, doLogout } = React.useContext(AuthContext);
+
+  return (
+    <>
+      <div className={"headerBox " + (user ? "loggedIn" : "loggedOut")}>
+        {user ? (
+          <div>
+            <strong>Ви увійшли як: {user.name || user.email}</strong><br/>
+            <button onClick={doLogout} style={{marginTop:"8px"}}>Вийти</button>
+          </div>
+        ) : (
+          <div>
+            <strong>Ви не авторизовані</strong><br/>
+            <span className="smallLabel">Щоб публікувати пости і лайкати — увійдіть або зареєструйтесь.</span>
+          </div>
+        )}
+      </div>
+
+      <Feed />
+
+      {user && <NewPostForm />}
+
+      <GitHubWidget />
+
+      {!user && (
+        <div className="twoCol">
+          <LoginForm />
+          <RegisterForm />
+        </div>
+      )}
+
+      <div className="footerNote">
+        <strong>Архітектура Лабораторної №2:</strong><br/>
+        • Це фронтенд (React у браузері), без перезавантаження сторінки.<br/>
+        • Він звертається до Flask-бекенду як до web API (`/api/...`).<br/>
+        • Зберігає сесію локально (`localStorage`).<br/>
+        • Дозволяє створювати пости, лайкати (з відміткою "Лайк поставлено").<br/>
+        • Має інтеграцію із зовнішнім сервісом (GitHub API).<br/>
+      </div>
+    </>
+  );
+}
+
+// Рендер
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(
+  <AuthProvider>
+    <App />
+  </AuthProvider>
+);
+
+    </script>
+</body>
+</html>
